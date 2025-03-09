@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from typing import List, Tuple
 import time
+import PyPDF2
 
 # Load environment variables
 load_dotenv()
@@ -116,13 +117,19 @@ def process_pdf(pdf_path: str):
     issue_id = get_issue_id(filename)
     print(f"Using issue ID: {issue_id}")
     
+    # Check if issue is already fully processed
+    with open(pdf_path, 'rb') as pdf_file:
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        pdf_page_count = len(pdf_reader.pages)
+    
+    processed_pages = get_processed_pages(issue_id)
+    if len(processed_pages) == pdf_page_count:
+        print(f"✓ {filename}: All {pdf_page_count} pages already processed")
+        return
+    
     # Convert PDF to images
     images = convert_from_path(pdf_path, dpi=300)
-    total_pages = len(images)
-    print(f"Total pages in PDF: {total_pages}")
-    
-    # Get already processed pages
-    processed_pages = get_processed_pages(issue_id)
+    print(f"Total pages in PDF: {pdf_page_count}")
     print(f"Pages already in database: {len(processed_pages)}")
     
     # Prepare work items for missing pages
@@ -130,10 +137,6 @@ def process_pdf(pdf_path: str):
     for page_num, image in enumerate(images, start=1):
         if str(page_num) not in processed_pages:
             work_items.append((image, page_num, filename, issue_id))
-    
-    if not work_items:
-        print(f"All {total_pages} pages already processed for {filename}")
-        return
     
     print(f"Processing {len(work_items)} remaining pages")
     
