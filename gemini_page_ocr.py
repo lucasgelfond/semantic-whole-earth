@@ -132,20 +132,10 @@ def process_pdf(pdf_path: str):
     print(f"Total pages in PDF: {pdf_page_count}")
     print(f"Pages already in database: {len(processed_pages)}")
     
-    # Prepare work items for missing pages
-    work_items = []
+    # Process each unprocessed page sequentially
     for page_num, image in enumerate(images, start=1):
         if str(page_num) not in processed_pages:
-            work_items.append((image, page_num, filename, issue_id))
-    
-    print(f"Processing {len(work_items)} remaining pages")
-    
-    # Process missing pages in parallel
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(process_page, item) for item in work_items]
-        
-        for future in as_completed(futures):
-            page_num, error = future.result()
+            page_num, error = process_page((image, page_num, filename, issue_id))
             if error:
                 print(f"Error processing page {page_num}: {error}")
             else:
@@ -158,18 +148,12 @@ def process_directory(directory: str = "WECs"):
         print(f"Directory {directory} not found")
         return
     
-    # Process PDFs in parallel
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [
-            executor.submit(process_pdf, str(pdf_file))
-            for pdf_file in pdf_dir.glob("*.pdf")
-        ]
-        
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(f"Error processing PDF: {str(e)}")
+    # Process PDFs sequentially
+    for pdf_file in pdf_dir.glob("*.pdf"):
+        try:
+            process_pdf(str(pdf_file))
+        except Exception as e:
+            print(f"Error processing PDF: {str(e)}")
 
 if __name__ == "__main__":
     # Suppress MallocStackLogging warnings
