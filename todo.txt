@@ -1,4 +1,3 @@
-- svelte hello world 
 - very light pglite / pgvector / tfjs implementation
 - postgres dump 
 - indexeddb downloading logic + state thing 
