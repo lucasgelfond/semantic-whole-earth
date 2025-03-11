@@ -22,6 +22,7 @@ export async function getDB(): Promise<PGlite> {
 
 // Initialize the database schema.
 export const initSchema = async (db: PGlite): Promise<void> => {
+	await getDB();
 	await db.exec(`
     create extension if not exists "uuid-ossp";
     create extension if not exists vector;
