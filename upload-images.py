@@ -9,6 +9,7 @@ import PyPDF2
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
@@ -48,10 +49,19 @@ def upload_page_image(pdf_path: str, page_num: int) -> str:
     filename = f"{Path(pdf_path).stem}_page_{page_num}"
     
     # Create a temporary file
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
         try:
-            # Save the PIL image to the temporary file
-            image.save(tmp_file.name, 'PNG')
+            # Convert to RGB and save as JPEG with compression
+            rgb_image = image.convert('RGB')
+            rgb_image.save(tmp_file.name, 'JPEG', quality=85, optimize=True)
+            
+            # Check file size and reduce quality if needed
+            while os.path.getsize(tmp_file.name) > 10_000_000:  # 10MB limit
+                quality = int(quality * 0.9)  # Reduce quality by 10%
+                if quality < 20:  # Set minimum quality threshold
+                    print(f"{thread_name}: Could not reduce file size enough")
+                    return None
+                rgb_image.save(tmp_file.name, 'JPEG', quality=quality, optimize=True)
             
             print(f"{thread_name}: Uploading {filename} to Cloudinary...")
             # Upload the temporary file to Cloudinary
@@ -62,6 +72,7 @@ def upload_page_image(pdf_path: str, page_num: int) -> str:
         finally:
             # Clean up
             image.close()
+            rgb_image.close()
             del images
             # Remove temporary file
             if os.path.exists(tmp_file.name):
