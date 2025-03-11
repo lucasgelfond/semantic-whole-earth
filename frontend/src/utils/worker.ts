@@ -36,7 +36,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
 	const classifier = await PipelineSingleton.getInstance((progress) => {
 		// We also add a progress callback to the pipeline so that we can
 		// track model loading.
-		console.log('Pipeline loading progress:', progress);
+		// console.log('Pipeline loading progress:', progress);
 		self.postMessage({ status: 'loading', progress });
 	});
 

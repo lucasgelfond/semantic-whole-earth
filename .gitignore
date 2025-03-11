@@ -3,3 +3,4 @@ WECs/
 .env
 frontend/static/rows.json
 frontend/static/issues.json
+frontend/static/database-dump-1741733651196.tar.gz

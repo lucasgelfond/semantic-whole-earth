@@ -187,19 +187,16 @@ export const clearDb = async (db: PGlite): Promise<void> => {
 	}
 };
 
-// Helper method to dump database to a file that can be downloaded
-export const dumpDatabase = async (
-	db: PGlite,
-	compression: 'auto' | 'gzip' | 'none' = 'auto'
-): Promise<void> => {
+// Export database to a downloadable file
+export const getBlob = async (db: PGlite): Promise<void> => {
 	try {
-		const dump = await db.dumpDataDir(compression);
+		const dump = await db.dumpDataDir('gzip');
 
 		// Create a download link
 		const url = URL.createObjectURL(dump);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `pglite-dump-${Date.now()}.tar${compression === 'none' ? '' : '.gz'}`;
+		a.download = `database-dump-${Date.now()}.tar.gz`;
 
 		// Trigger download
 		document.body.appendChild(a);
@@ -209,7 +206,32 @@ export const dumpDatabase = async (
 		document.body.removeChild(a);
 		URL.revokeObjectURL(url);
 	} catch (error) {
-		console.error('Failed to dump database:', error);
+		console.error('Failed to export database:', error);
+		throw error;
+	}
+};
+
+// Import database from a file
+export const importBlob = async (db: PGlite, file: Blob): Promise<void> => {
+	try {
+		// Create a new database instance with the dump file
+		const newDb = new PGlite('idb://supa-semantic-search', {
+			loadDataDir: file,
+			extensions: {
+				vector,
+				uuid_ossp
+			}
+		});
+
+		// Wait for the database to be ready
+		await newDb.waitReady;
+
+		// Update the singleton instance
+		dbInstance = newDb;
+
+		console.log('Successfully imported database');
+	} catch (error) {
+		console.error('Failed to import database:', error);
 		throw error;
 	}
 };
