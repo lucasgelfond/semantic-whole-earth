@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PGlite } from '@electric-sql/pglite';
-  import { getDB, initSchema, countRows, seedDb, search } from '../utils/db';
+  import { getDB, initSchema, countRows, seedDb, search, getTopTen } from '../utils/db';
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import type { Row } from '../types/row';
@@ -12,7 +12,6 @@
   let initializing = false;
   let db: PGlite;
   let worker: Worker;
-
 
   onMount(() => {
     const setup = async () => {
@@ -77,40 +76,116 @@
       classify(input);
     }
   }
+
+  async function handleGetDB() {
+    db = await getDB();
+    console.log('Database instance retrieved');
+  }
+
+  async function handleInitSchema() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    await initSchema(db);
+    console.log('Schema initialized');
+  }
+
+  async function handleCountRows() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    const count = await countRows(db, 'page');
+    console.log(`Row count: ${count}`);
+  }
+
+  async function handleSeedDb() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    await seedDb(db);
+    console.log('Database seeded');
+  }
+
+  async function handleTopTen() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    const topTen = await getTopTen(db);
+    console.log('Top ten rows:', topTen);
+  }
 </script>
 
-<div class="flex gap-2">
-  <input 
-    type="text"
-    class="border rounded px-2 py-1"
-    placeholder="Enter text to search..."
-    bind:value={input}
-    on:keypress={handleKeyPress}
-  />
-  <button 
-    class="bg-blue-500 text-white px-4 py-1 rounded"
-    on:click={() => classify(input)}
-  >
-  Search
-  </button>
-</div>
+<div class="flex flex-col gap-4">
+  <div class="flex gap-2">
+    <input 
+      type="text"
+      class="border rounded px-2 py-1"
+      placeholder="Enter text to search..."
+      bind:value={input}
+      on:keypress={handleKeyPress}
+    />
+    <button 
+      class="bg-blue-500 text-white px-4 py-1 rounded"
+      on:click={() => classify(input)}
+    >
+    Search
+    </button>
+  </div>
 
-{#if $result}
-  <div class="mt-4">
-    <h3 class="font-bold">Search Results:</h3>
-    <ul class="list-disc pl-5">
-      {#each $result as item}
-        <li>{item}</li>
-      {/each}
-    </ul>
+  <div class="flex gap-2">
+    <button 
+      class="bg-green-500 text-white px-4 py-1 rounded"
+      on:click={handleGetDB}
+    >
+      Get DB
+    </button>
+    <button 
+      class="bg-yellow-500 text-white px-4 py-1 rounded"
+      on:click={handleInitSchema}
+    >
+      Init Schema
+    </button>
+    <button 
+      class="bg-purple-500 text-white px-4 py-1 rounded"
+      on:click={handleCountRows}
+    >
+      Count Rows
+    </button>
+    <button 
+      class="bg-red-500 text-white px-4 py-1 rounded"
+      on:click={handleSeedDb}
+    >
+      Seed DB
+    </button>
+    <button 
+      class="bg-orange-500 text-white px-4 py-1 rounded"
+      on:click={handleTopTen}
+    >
+      Top Ten
+    </button>
   </div>
-{:else if content.length}
-  <div class="mt-4">
-    <h3 class="font-bold">All Content:</h3>
-    <ul class="list-disc pl-5">
-      {#each content as item}
-        <li>{item}</li>
-      {/each}
-    </ul>
-  </div>
-{/if}
+
+  {#if $result}
+    <div class="mt-4">
+      <h3 class="font-bold">Search Results:</h3>
+      <ul class="list-disc pl-5">
+        {#each $result as item}
+          <li>{item}</li>
+        {/each}
+      </ul>
+    </div>
+  {:else if content.length}
+    <div class="mt-4">
+      <h3 class="font-bold">All Content:</h3>
+      <ul class="list-disc pl-5">
+        {#each content as item}
+          <li>{item}</li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+</div>
