@@ -43,22 +43,25 @@ self.addEventListener('message', async (event: MessageEvent) => {
 	// Signal that model is ready
 	self.postMessage({ status: 'ready' });
 
-	console.log('Processing text:', event.data.text);
+	// Only proceed with embedding if we have text to process
+	if (event.data.text) {
+		console.log('Processing text:', event.data.text);
 
-	// Actually perform the classification
-	const output = await classifier(event.data.text, {
-		pooling: 'mean',
-		normalize: true
-	});
+		// Actually perform the classification
+		const output = await classifier(event.data.text, {
+			pooling: 'mean',
+			normalize: true
+		});
 
-	// Extract the embedding output
-	const embedding = Array.from(output.data);
-	console.log('Generated embedding of length:', embedding.length);
+		// Extract the embedding output
+		const embedding = Array.from(output.data);
+		console.log('Generated embedding of length:', embedding.length);
 
-	// Send the output back to the main thread
-	self.postMessage({
-		status: 'complete',
-		embedding
-	});
-	console.log('Sent results back to main thread');
+		// Send the output back to the main thread
+		self.postMessage({
+			status: 'complete',
+			embedding
+		});
+		console.log('Sent results back to main thread');
+	}
 });

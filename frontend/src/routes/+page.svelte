@@ -38,6 +38,8 @@
       worker = new Worker(new URL('../utils/worker.ts', import.meta.url), {
         type: 'module'
       });
+      // Trigger pipeline initialization immediately
+      worker.postMessage({ type: 'init' });
     }
 
     const onMessageReceived = async (e: MessageEvent) => {
