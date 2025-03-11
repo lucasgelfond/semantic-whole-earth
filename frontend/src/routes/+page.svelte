@@ -51,10 +51,10 @@ onMount(() => {
         ready = true;
         break;
       case 'complete':
-        // Inner product search
-        const searchResults = await search(db, e.data.embedding);
+        // Pass both the search text and embedding
+        const searchResults = await search(db, input, e.data.embedding);
         console.log({searchResults})
-        result.set(searchResults.map(row => row.content));
+        result.set(searchResults.map(row => row.ocr_result)); // Note: changed from content to ocr_result
         break;
     }
   };

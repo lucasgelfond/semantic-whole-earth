@@ -76,26 +76,53 @@ export const getAll = async (db: PGlite): Promise<Array<Row>> => {
 };
 export const search = async (
 	db: PGlite,
+	query: string,
 	embedding: number[],
-	match_threshold = 0.8,
-	limit = 3
+	match_count = 10,
+	full_text_weight = 1.0,
+	semantic_weight = 1.0,
+	rrf_k = 50
 ): Promise<Array<Row>> => {
 	const res = await db.query(
 		`
-    select * from page
-
-    -- The inner product is negative, so we negate match_threshold
-    where page.embedding <#> $1 < $2
-
-    -- Our embeddings are normalized to length 1, so cosine similarity
-    -- and inner product will produce the same query results.
-    -- Using inner product which can be computed faster.
-    --
-    -- For the different distance functions, see https://github.com/pgvector/pgvector
-    order by page.embedding <#> $1
-    limit $3;
-    `,
-		[JSON.stringify(embedding), -Number(match_threshold), Number(limit)]
+		with full_text as (
+			select
+				id,
+				row_number() over(order by ts_rank_cd(fts, websearch_to_tsquery('english', $1)) desc) as rank_ix
+			from
+				page
+			where
+				fts @@ websearch_to_tsquery('english', $1)
+			order by rank_ix
+			limit least($2, 10) * 2
+		),
+		semantic as (
+			select
+				id,
+				row_number() over (order by embedding <#> $3) as rank_ix
+			from
+				page
+			where
+				embedding is not null
+			order by rank_ix
+			limit least($2, 10) * 2
+		)
+		select
+			page.*
+		from
+			full_text
+			full outer join semantic
+				on full_text.id = semantic.id
+			join page
+				on coalesce(full_text.id, semantic.id) = page.id
+		order by
+			coalesce(1.0 / ($4 + full_text.rank_ix), 0.0) * $5 +
+			coalesce(1.0 / ($4 + semantic.rank_ix), 0.0) * $6
+			desc
+		limit
+			least($2, 10)
+		`,
+		[query, match_count, JSON.stringify(embedding), rrf_k, full_text_weight, semantic_weight]
 	);
 	return res.rows as Array<Row>;
 };
