@@ -1,5 +1,8 @@
 export type Row = {
-	content: string;
-	embedding: string;
 	id: string;
+	parent_issue_id: string;
+	page_number: string;
+	ocr_result: string;
+	embedding: number[];
+	created_at: string;
 };

@@ -26,9 +26,22 @@ export const initSchema = async (db: PGlite): Promise<void> => {
     create extension if not exists "uuid-ossp";
     create extension if not exists vector;
     
+    create table if not exists issue (
+      id uuid primary key,
+      filename text,
+      created_at timestamp with time zone,
+      num_pages integer,
+      issue_url text,
+      description text,
+      pdf_download text,
+      internet_archive text,
+      collection text,
+      pub_date text
+    );
+
     create table if not exists page (
       id uuid default uuid_generate_v4() primary key,
-      parent_issue_id text,
+      parent_issue_id uuid references issue(id),
       page_number text not null, 
       ocr_result text,
       fts tsvector GENERATED ALWAYS AS (to_tsvector('english', ocr_result)) STORED,
@@ -48,8 +61,35 @@ export const countRows = async (db: PGlite, table: string): Promise<number> => {
 };
 
 export const seedDb = async (db: PGlite): Promise<void> => {
-	const response = await fetch('/rows.json');
-	const rows = await response.json();
+	// First seed issues
+	const issuesResponse = await fetch('/issues.json');
+	const issues = await issuesResponse.json();
+
+	for (const issue of issues) {
+		await db.query(
+			`INSERT INTO issue (
+				id, filename, created_at, num_pages, issue_url, 
+				description, pdf_download, internet_archive, collection, pub_date
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (id) DO NOTHING`,
+			[
+				issue.id,
+				issue.filename,
+				issue.created_at,
+				issue.num_pages,
+				issue.issue_url,
+				issue.description,
+				issue.pdf_download,
+				issue.internet_archive,
+				issue.collection,
+				issue.pub_date
+			]
+		);
+	}
+
+	// Then seed pages
+	const pagesResponse = await fetch('/rows.json');
+	const rows = await pagesResponse.json();
 
 	for (const row of rows) {
 		const { parent_issue_id, page_number, ocr_result, embedding } = row;
@@ -74,6 +114,12 @@ export const getAll = async (db: PGlite): Promise<Array<Row>> => {
 	const res = await db.query(`SELECT * FROM page ORDER BY ocr_result`);
 	return res.rows as Array<Row>;
 };
+
+export const getIssues = async (db: PGlite): Promise<Array<any>> => {
+	const res = await db.query(`SELECT * FROM issue ORDER BY created_at DESC`);
+	return res.rows;
+};
+
 export const search = async (
 	db: PGlite,
 	query: string,
@@ -132,6 +178,7 @@ export const clearDb = async (db: PGlite): Promise<void> => {
 	try {
 		await db.exec(`
 			DROP TABLE IF EXISTS page CASCADE;
+			DROP TABLE IF EXISTS issue CASCADE;
 		`);
 		console.log('Successfully cleared database');
 	} catch (error) {

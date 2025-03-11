@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { PGlite } from '@electric-sql/pglite';
-import { getDB, initSchema, countRows, seedDb, search } from '../utils/db';
+import { getDB, initSchema, countRows, seedDb, search, getIssues } from '../utils/db';
 import { onMount } from 'svelte';
 import { writable } from 'svelte/store';
 import type { Row } from '../types/row';
@@ -13,6 +13,7 @@ let ready: boolean | null = null;
 let initializing = false;
 let db: PGlite;
 let worker: Worker;
+let issueMap: Record<string, any> = {};
 
 onMount(() => {
   const setup = async () => {
@@ -28,6 +29,14 @@ onMount(() => {
     // Get Items
     const items = await db.query<{content: string}>('SELECT content FROM embeddings order by content asc');
     content = items.rows.map(row => row.content);
+
+    // Get issues and create map
+    const issues = await getIssues(db);
+    issueMap = issues.reduce((acc, issue) => {
+      acc[issue.id] = issue;
+      return acc;
+    }, {} as Record<string, any>);
+
   }
 
   if (!db && !initializing) {
@@ -51,6 +60,13 @@ onMount(() => {
         ready = true;
         break;
       case 'complete':
+        // Get latest issues
+        const issues = await getIssues(db);
+        issueMap = issues.reduce((acc, issue) => {
+          acc[issue.id] = issue;
+          return acc;
+        }, {} as Record<string, any>);
+        
         // Pass both the search text and embedding
         const searchResults = await search(db, input, e.data.embedding);
         console.log({searchResults})
@@ -105,12 +121,21 @@ function handleKeyPress(event: KeyboardEvent) {
         {#each $result as item}
           <div class="border rounded p-4 grid grid-cols-[220px_1fr] gap-4">
             <div class="flex flex-col">
-              <span class="font-semibold">Issue ID:</span>
-              <div class="text-sm break-words">
-                {item.parent_issue_id || 'Unknown'}
-              </div>
-              <span class="font-semibold mt-2">Page:</span>
-              <span>{item.page_number}</span>
+              {#if issueMap[item.parent_issue_id]}
+                <div class="text-sm text-gray-600" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                  {@html issueMap[item.parent_issue_id].description}
+                </div>
+                <div class="flex gap-2 mt-2 text-sm">
+                  <a href={issueMap[item.parent_issue_id].internet_archive} class="text-blue-500 hover:underline" target="_blank">Archive</a>
+                  <a href={issueMap[item.parent_issue_id].issue_url} class="text-blue-500 hover:underline" target="_blank">Info</a>
+                  <a href={issueMap[item.parent_issue_id].pdf_download} class="text-blue-500 hover:underline" target="_blank">PDF</a>
+                </div>
+                <div class="mt-2 text-sm">
+                  <div>Pages: {issueMap[item.parent_issue_id].num_pages}</div>
+                  <div>Published: {issueMap[item.parent_issue_id].pub_date}</div>
+                  <div>Page {item.page_number}/{issueMap[item.parent_issue_id].num_pages}</div>
+                </div>
+              {/if}
             </div>
             <div class="h-[150px] overflow-y-auto">
               {item.ocr_result}
