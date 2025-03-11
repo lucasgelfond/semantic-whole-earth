@@ -169,7 +169,7 @@ def process_pdf(pdf_path: str):
     ]
     
     # Process pages with thread pool
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         executor.map(process_single_page, pages_to_process)
         
     print(f"Completed processing {filename}")
