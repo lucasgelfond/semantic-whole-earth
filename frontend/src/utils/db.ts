@@ -46,7 +46,8 @@ export const initSchema = async (db: PGlite): Promise<void> => {
       ocr_result text,
       fts tsvector GENERATED ALWAYS AS (to_tsvector('english', ocr_result)) STORED,
       embedding vector(384),
-      created_at timestamp with time zone default timezone('utc'::text, now())
+      created_at timestamp with time zone default timezone('utc'::text, now()),
+      image_url text
     );
 
     CREATE INDEX IF NOT EXISTS page_fts_idx ON page USING gin(fts);
@@ -86,18 +87,17 @@ export const seedDb = async (db: PGlite): Promise<void> => {
 			]
 		);
 	}
-
 	// Then seed pages
 	const pagesResponse = await fetch('/rows.json');
 	const rows = await pagesResponse.json();
 
 	for (const row of rows) {
-		const { parent_issue_id, page_number, ocr_result, embedding } = row;
+		const { parent_issue_id, page_number, ocr_result, embedding, image_url } = row;
 		if (parent_issue_id && page_number && ocr_result) {
 			await db.query(
-				`INSERT INTO page (parent_issue_id, page_number, ocr_result, embedding) 
-				VALUES ($1, $2, $3, $4)`,
-				[parent_issue_id, page_number, ocr_result, embedding]
+				`INSERT INTO page (parent_issue_id, page_number, ocr_result, embedding, image_url) 
+				VALUES ($1, $2, $3, $4, $5)`,
+				[parent_issue_id, page_number, ocr_result, embedding, image_url]
 			);
 		}
 	}

@@ -5,4 +5,5 @@ export type Row = {
 	ocr_result: string;
 	embedding: number[];
 	created_at: string;
+	image_url: string;
 };
