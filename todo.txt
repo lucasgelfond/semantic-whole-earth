@@ -1,0 +1,8 @@
+- svelte hello world 
+- very light pglite / pgvector / tfjs implementation
+- postgres dump 
+- indexeddb downloading logic + state thing 
+- add tfs and embedding columns to db 
+- search works 
+- display results 
+- scrape for download, internet archive links, published + collection 
