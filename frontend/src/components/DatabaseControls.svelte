@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PGlite } from '@electric-sql/pglite';
-  import { getDB, initSchema, countRows, seedDb, getTopTen, dumpDatabase } from '../utils/db';
+  import { getDB, initSchema, countRows, seedDb, getTopTen, dumpDatabase, clearDb } from '../utils/db';
 
   export let db: PGlite | null = null;
 
@@ -52,6 +52,15 @@
     }
     await dumpDatabase(db);
   }
+
+  async function handleClearDb() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    await clearDb(db);
+    console.log('Database cleared');
+  }
 </script>
 
 <div class="flex gap-2">
@@ -90,5 +99,11 @@
     on:click={handleDumpDB}
   >
     Dump DB
+  </button>
+  <button 
+    class="bg-blue-500 text-white px-4 py-1 rounded"
+    on:click={handleClearDb}
+  >
+    Clear DB
   </button>
 </div> 

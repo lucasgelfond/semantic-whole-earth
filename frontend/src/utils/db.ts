@@ -24,13 +24,20 @@ export async function getDB(): Promise<PGlite> {
 export const initSchema = async (db: PGlite): Promise<void> => {
 	await db.exec(`
     create extension if not exists "uuid-ossp";
+    create extension if not exists vector;
+    
     create table if not exists page (
       id uuid default uuid_generate_v4() primary key,
       parent_issue_id text,
       page_number text not null, 
       ocr_result text,
+      fts tsvector GENERATED ALWAYS AS (to_tsvector('english', ocr_result)) STORED,
+      embedding vector(384),
       created_at timestamp with time zone default timezone('utc'::text, now())
     );
+
+    CREATE INDEX IF NOT EXISTS page_fts_idx ON page USING gin(fts);
+    CREATE INDEX IF NOT EXISTS page_embedding_idx ON page USING hnsw (embedding vector_ip_ops);
   `);
 };
 
@@ -45,16 +52,16 @@ export const seedDb = async (db: PGlite): Promise<void> => {
 	const rows = await response.json();
 
 	for (const row of rows) {
-		const { parent_issue_id, page_number, ocr_result } = row;
+		const { parent_issue_id, page_number, ocr_result, embedding } = row;
 		if (parent_issue_id && page_number && ocr_result) {
-			console.log({ parent_issue_id, page_number, ocr_result });
 			await db.query(
-				`INSERT INTO page (parent_issue_id, page_number, ocr_result) 
-				VALUES ($1, $2, $3)`,
-				[parent_issue_id, page_number, ocr_result]
+				`INSERT INTO page (parent_issue_id, page_number, ocr_result, embedding) 
+				VALUES ($1, $2, $3, $4)`,
+				[parent_issue_id, page_number, ocr_result, embedding]
 			);
 		}
 	}
+	console.log('done seeding DB');
 };
 
 export const getTopTen = async (db: PGlite): Promise<Array<Row>> => {
@@ -64,10 +71,9 @@ export const getTopTen = async (db: PGlite): Promise<Array<Row>> => {
 };
 
 export const getAll = async (db: PGlite): Promise<Array<Row>> => {
-	const res = await db.query(`SELECT * FROM embeddings ORDER BY content`);
+	const res = await db.query(`SELECT * FROM page ORDER BY ocr_result`);
 	return res.rows as Array<Row>;
 };
-
 export const search = async (
 	db: PGlite,
 	embedding: number[],
@@ -76,19 +82,19 @@ export const search = async (
 ): Promise<Array<Row>> => {
 	const res = await db.query(
 		`
-      select * from embeddings
-  
-      -- The inner product is negative, so we negate match_threshold
-      where embeddings.embedding <#> $1 < $2
-  
-      -- Our embeddings are normalized to length 1, so cosine similarity
-      -- and inner product will produce the same query results.
-      -- Using inner product which can be computed faster.
-      --
-      -- For the different distance functions, see https://github.com/pgvector/pgvector
-      order by embeddings.embedding <#> $1
-      limit $3;
-      `,
+    select * from page
+
+    -- The inner product is negative, so we negate match_threshold
+    where page.embedding <#> $1 < $2
+
+    -- Our embeddings are normalized to length 1, so cosine similarity
+    -- and inner product will produce the same query results.
+    -- Using inner product which can be computed faster.
+    --
+    -- For the different distance functions, see https://github.com/pgvector/pgvector
+    order by page.embedding <#> $1
+    limit $3;
+    `,
 		[JSON.stringify(embedding), -Number(match_threshold), Number(limit)]
 	);
 	return res.rows as Array<Row>;
@@ -96,10 +102,15 @@ export const search = async (
 
 // Helper method to clear all tables from the database
 export const clearDb = async (db: PGlite): Promise<void> => {
-	await db.exec(`
-		DROP TABLE IF EXISTS page CASCADE;
-		DROP TABLE IF EXISTS embeddings CASCADE;
-	`);
+	try {
+		await db.exec(`
+			DROP TABLE IF EXISTS page CASCADE;
+		`);
+		console.log('Successfully cleared database');
+	} catch (error) {
+		console.error('Error clearing database:', error);
+		throw error;
+	}
 };
 
 // Helper method to dump database to a file that can be downloaded

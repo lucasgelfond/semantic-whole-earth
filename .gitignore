@@ -1,3 +1,4 @@
 WECs/
 .DS_Store
 .env
+frontend/static/rows.json
