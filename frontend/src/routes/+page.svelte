@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PGlite } from '@electric-sql/pglite';
-  import { getDB, initSchema, countRows, seedDb, search, getTopTen } from '../utils/db';
+  import { getDB, initSchema, countRows, seedDb, search, getTopTen, dumpDatabase } from '../utils/db';
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import type { Row } from '../types/row';
@@ -117,6 +117,14 @@
     const topTen = await getTopTen(db);
     console.log('Top ten rows:', topTen);
   }
+
+  async function handleDumpDB() {
+    if (!db) {
+      console.error('Database not initialized');
+      return;
+    }
+    await dumpDatabase(db);
+  }
 </script>
 
 <div class="flex flex-col gap-4">
@@ -166,6 +174,12 @@
       on:click={handleTopTen}
     >
       Top Ten
+    </button>
+    <button 
+      class="bg-pink-500 text-white px-4 py-1 rounded"
+      on:click={handleDumpDB}
+    >
+      Dump DB
     </button>
   </div>
 

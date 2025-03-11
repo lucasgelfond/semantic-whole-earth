@@ -101,3 +101,30 @@ export const clearDb = async (db: PGlite): Promise<void> => {
 		DROP TABLE IF EXISTS embeddings CASCADE;
 	`);
 };
+
+// Helper method to dump database to a file that can be downloaded
+export const dumpDatabase = async (
+	db: PGlite,
+	compression: 'auto' | 'gzip' | 'none' = 'auto'
+): Promise<void> => {
+	try {
+		const dump = await db.dumpDataDir(compression);
+
+		// Create a download link
+		const url = URL.createObjectURL(dump);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `pglite-dump-${Date.now()}.tar${compression === 'none' ? '' : '.gz'}`;
+
+		// Trigger download
+		document.body.appendChild(a);
+		a.click();
+
+		// Cleanup
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	} catch (error) {
+		console.error('Failed to dump database:', error);
+		throw error;
+	}
+};
