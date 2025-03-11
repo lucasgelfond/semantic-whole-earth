@@ -3,12 +3,7 @@
   import { getDB, initSchema, countRows, seedDb, search } from '../utils/db';
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
-
-  type Row = {
-    content: string;
-    embedding: string;
-    id: string;
-  };
+  import type { Row } from '../types/row';
 
   let content: string[] = [];
   let input = '';
@@ -18,7 +13,8 @@
   let db: PGlite;
   let worker: Worker;
 
-  onMount(async () => {
+
+  onMount(() => {
     const setup = async () => {
       initializing = true;
       db = await getDB();
@@ -30,12 +26,12 @@
       }
 
       // Get Items
-      const items = await db.query('SELECT content FROM embeddings order by content asc');
-      content = items.rows.map((row: {content: string}) => row.content);
+      const items = await db.query<{content: string}>('SELECT content FROM embeddings order by content asc');
+      content = items.rows.map(row => row.content);
     }
 
     if (!db && !initializing) {
-      await setup();
+      setup();
     }
 
     if (!worker) {
@@ -56,14 +52,16 @@
           // Inner product search
           const searchResults = await search(db, e.data.embedding);
           console.log({searchResults})
-          result.set(searchResults.rows.map((row: Row) => row.content));
+          result.set(searchResults.map(row => row.content));
           break;
       }
     };
 
     worker.addEventListener('message', onMessageReceived);
 
-    return () => worker.removeEventListener('message', onMessageReceived);
+    return () => {
+      worker.removeEventListener('message', onMessageReceived);
+    };
   });
 
   function classify(text: string) {
