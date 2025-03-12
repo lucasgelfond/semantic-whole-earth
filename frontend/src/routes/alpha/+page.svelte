@@ -9,7 +9,7 @@ let worker: Worker;
 
 onMount(() => {
   if (!worker) {
-    worker = new Worker(new URL('../utils/worker.ts', import.meta.url), {
+    worker = new Worker(new URL('../../utils/worker.ts', import.meta.url), {
       type: 'module'
     });
     worker.postMessage({ type: 'init' });
