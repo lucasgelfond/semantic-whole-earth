@@ -84,17 +84,23 @@ def process_page(pdf_path: str, page: dict, issue_id: str):
     page_num = int(page['page_number'])
     print(f"{thread_name}: Processing page {page_num}")
     
-    # Upload image to Cloudinary
-    image_url = upload_page_image(str(pdf_path), page_num)
-    
-    if image_url:
-        print(f"{thread_name}: Updating database with image URL for page {page_num}")
-        # Update database with image URL
-        supabase.table('page').update({
-            'image_url': image_url
-        }).eq('id', page['id']).execute()
-    else:
-        print(f"{thread_name}: Failed to upload image for page {page_num}")
+    try:
+        # Upload image to Cloudinary
+        image_url = upload_page_image(str(pdf_path), page_num)
+        
+        if image_url:
+            print(f"{thread_name}: Updating database with image URL for page {page_num}")
+            try:
+                # Update database with image URL
+                supabase.table('page').update({
+                    'image_url': image_url
+                }).eq('id', page['id']).execute()
+            except Exception as e:
+                print(f"{thread_name}: Database update failed for page {page_num}: {str(e)}")
+        else:
+            print(f"{thread_name}: Failed to upload image for page {page_num}")
+    except Exception as e:
+        print(f"{thread_name}: Failed to process page {page_num}: {str(e)}")
 
 def process_pdfs(directory: str = "WECs"):
     """Process all PDFs in directory and upload page images"""
