@@ -5,15 +5,15 @@ import { db, content, result, ready, issueMap } from '$lib/setup';
 import {search} from '../../utils/db';
 
 let input = '';
-let worker: Worker;
+// let worker: Worker;
 
 onMount(() => {
-  if (!worker) {
-    worker = new Worker(new URL('../../utils/worker.ts', import.meta.url), {
-      type: 'module'
-    });
-    worker.postMessage({ type: 'init' });
-  }
+  // if (!worker) {
+  //   worker = new Worker(new URL('../../utils/worker.ts', import.meta.url), {
+  //     type: 'module'
+  //   });
+  //   worker.postMessage({ type: 'init' });
+  // }
 
   const onMessageReceived = async (e: MessageEvent) => {
     switch (e.data.status) {
