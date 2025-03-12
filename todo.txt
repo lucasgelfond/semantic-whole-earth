@@ -1,7 +1,3 @@
-- very light pglite / pgvector / tfjs implementation
-- postgres dump 
-- indexeddb downloading logic + state thing 
-- add tfs and embedding columns to db 
-- search works 
-- display results 
-- scrape for download, internet archive links, published + collection 
+- full text upload somewhere 
+- exclude error ones from the hybrid search jawns 
+- figure out pglite import / export / cdn 
