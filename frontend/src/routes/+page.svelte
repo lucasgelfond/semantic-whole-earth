@@ -5,6 +5,7 @@ import { writable } from 'svelte/store';
 
 let input = '';
 let result: any[] = [];
+let loading = false;
 const issueMap = writable<Record<string, any>>({});
 
 const supabase = createClient(
@@ -27,6 +28,9 @@ async function getIssues() {
 }
 
 async function search(query: string) {
+  if (loading) return;
+  
+  loading = true;
   try {
     const response = await fetch('https://quqkbbcfqdgmgnzutqer.supabase.co/functions/v1/embed-search', {
       method: 'POST',
@@ -51,6 +55,8 @@ async function search(query: string) {
 
   } catch (error) {
     console.error('Search error:', error);
+  } finally {
+    loading = false;
   }
 }
 
@@ -74,21 +80,33 @@ onMount(async () => {
       placeholder="Enter text to search..."
       bind:value={input}
       on:keypress={handleKeyPress}
+      disabled={loading}
     />
     <button 
-      class="bg-blue-500 text-white px-4 py-1 rounded"
+      class="bg-blue-500 text-white px-4 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
       on:click={() => search(input)}
+      disabled={loading}
     >
-      Search
+      {#if loading}
+        <span class="inline-block animate-spin mr-1">⟳</span>
+        Searching...
+      {:else}
+        Search
+      {/if}
     </button>
   </div>
 
   {#if result.length}
     <div class="mt-4">
-      <h3 class="font-bold">Search Results:</h3>
+      <h3 class="font-bold mb-3">Search Results:</h3>
       <div class="grid gap-4 max-w-3xl">
         {#each result as item}
-          <div class="border rounded p-4 grid grid-cols-[220px_1fr] gap-4">
+          <div class="border rounded p-4 grid grid-cols-[100px_220px_1fr] gap-4">
+            <div class="w-[100px]">
+              {#if item.image_url}
+                <img src={item.image_url} alt="Page preview" class="w-full h-auto object-contain" />
+              {/if}
+            </div>
             <div class="flex flex-col">
               {#if $issueMap[item.parent_issue_id]}
                 <div class="text-sm text-gray-600" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
