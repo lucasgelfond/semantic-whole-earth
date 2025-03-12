@@ -58,7 +58,8 @@ async function search(query: string) {
     }
 
     const data = await response.json();
-    result = data;
+    // @ts-ignore
+    result = data.filter(item => !item?.error)
     await getIssues();
     console.log({data});
 
