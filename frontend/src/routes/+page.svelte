@@ -8,6 +8,15 @@ let result: any[] = [];
 let loading = false;
 const issueMap = writable<Record<string, any>>({});
 
+const collectionMap: Record<string, string> = {
+  'whole-earth-catalogs': 'Whole Earth Catalog',
+  'whole-earth-software-review': 'Whole Earth Software Review', 
+  'whole-earth-review': 'Whole Earth Review',
+  'special-publications': 'Special Publications',
+  'coevolution-quarterly': 'CoEvolution Quarterly',
+  'whole-earth-magazine': 'Whole Earth Magazine'
+};
+
 const supabase = createClient(
   'https://quqkbbcfqdgmgnzutqer.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cWtiYmNmcWRnbWduenV0cWVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE0NTAxMjUsImV4cCI6MjA1NzAyNjEyNX0.QXmOk7-4_9GpzJjrx7Zr_bACKecNM8_bkAMo7zECYPI'
@@ -40,7 +49,7 @@ async function search(query: string) {
       },
       body: JSON.stringify({
         query: query,
-        match_count: 10 // Default number of matches to return
+        match_count: 30 
       })
     });
 
@@ -118,7 +127,7 @@ onMount(async () => {
                   <a href={$issueMap[item.parent_issue_id].pdf_download} class="text-blue-500 hover:underline" target="_blank">PDF</a>
                 </div>
                 <div class="mt-2 text-sm">
-                  <div>Pages: {$issueMap[item.parent_issue_id].num_pages}</div>
+                  <div class="font-bold">{collectionMap[$issueMap[item.parent_issue_id].collection]}</div>
                   <div>Published: {$issueMap[item.parent_issue_id].pub_date}</div>
                   <div>Page {item.page_number}/{$issueMap[item.parent_issue_id].num_pages}</div>
                 </div>
