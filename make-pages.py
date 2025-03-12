@@ -42,8 +42,15 @@ def save_concatenated_pages():
             
         db_page_count = len(pages.data)
         
-        # Skip if page count doesn't match expected
-        if issue['num_pages'] is None or db_page_count != issue['num_pages']:
+        # Update issue record if num_pages is None
+        if issue['num_pages'] is None:
+            supabase.table('issue')\
+                .update({'num_pages': db_page_count})\
+                .eq('id', issue_id)\
+                .execute()
+            print(f"Updated {filename} with correct page count: {db_page_count}")
+        # Skip only if page counts don't match and num_pages is not None
+        elif db_page_count != issue['num_pages']:
             print(f"Skipping {filename}: Have {db_page_count} pages, expected {issue['num_pages']}")
             continue
             
