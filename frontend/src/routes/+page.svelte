@@ -2,11 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { onMount } from 'svelte';
 import { writable } from 'svelte/store';
+import Modal, { bind } from 'svelte-simple-modal';
+import ResultModal from '../components/ResultModal.svelte';
 
 let input = '';
 let result: any[] = [];
 let loading = false;
 const issueMap = writable<Record<string, any>>({});
+
+// Add modal store
+const modalStore = writable<any>(null);
 
 const collectionMap: Record<string, string> = {
   'whole-earth-catalogs': 'Whole Earth Catalog',
@@ -76,70 +81,106 @@ function handleKeyPress(event: KeyboardEvent) {
   }
 }
 
+function showResultModal(item: any) {
+  const issue = $issueMap[item.parent_issue_id];
+  modalStore.set(bind(ResultModal, { item, issue, collectionMap }));
+}
+
 onMount(async () => {
   await getIssues();
 });
 
 </script>
 
-<div class="flex flex-col gap-4 px-20 py-40">
-  <div class="flex gap-2">
-    <input 
-      type="text"
-      class="border rounded px-2 py-1"
-      placeholder="Enter text to search..."
-      bind:value={input}
-      on:keypress={handleKeyPress}
-      disabled={loading}
-    />
-    <button 
-      class="bg-blue-500 text-white px-4 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-      on:click={() => search(input)}
-      disabled={loading}
-    >
-      {#if loading}
-        <span class="inline-block animate-spin mr-1">⟳</span>
-        Searching...
-      {:else}
-        Search
-      {/if}
-    </button>
-  </div>
-
-  {#if result.length}
-    <div class="mt-4">
-      <h3 class="font-bold mb-3">Search Results:</h3>
-      <div class="grid gap-4 max-w-3xl">
-        {#each result as item}
-          <div class="border rounded p-4 grid grid-cols-[100px_220px_1fr] gap-4">
-            <div class="w-[100px]">
-              {#if item.image_url}
-                <img src={item.image_url} alt="Page preview" class="w-full h-auto object-contain" />
-              {/if}
-            </div>
-            <div class="flex flex-col">
-              {#if $issueMap[item.parent_issue_id]}
-                <div class="text-sm text-gray-600" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
-                  {@html $issueMap[item.parent_issue_id].description}
-                </div>
-                <div class="flex gap-2 mt-2 text-sm">
-                  <a href={$issueMap[item.parent_issue_id].internet_archive} class="text-blue-500 hover:underline" target="_blank">Archive</a>
-                  <a href={$issueMap[item.parent_issue_id].issue_url} class="text-blue-500 hover:underline" target="_blank">Info</a>
-                  <a href={$issueMap[item.parent_issue_id].pdf_download} class="text-blue-500 hover:underline" target="_blank">PDF</a>
-                </div>
-                <div class="mt-2 text-sm">
-                  <div class="font-bold">{collectionMap[$issueMap[item.parent_issue_id].collection]}</div>
-                  <div>Published: {$issueMap[item.parent_issue_id].pub_date}</div>
-                  <div>Page {item.page_number}/{$issueMap[item.parent_issue_id].num_pages}</div>
-                </div>
-              {/if}
-            </div>
-            <div class="h-[150px] overflow-y-auto">
-              {item.ocr_result}
-            </div>
-          </div>
-        {/each}
-      </div>
+<Modal 
+  show={$modalStore}
+  styleWindow={{ width: '90vw', height: '90vh', maxWidth: 'none' }}
+  styleContent={{ height: '100%' }}
+>
+  <div class="flex flex-col gap-4 px-20 py-40">
+    <div class="flex gap-2">
+      <input 
+        type="text"
+        class="border rounded px-2 py-1"
+        placeholder="Enter text to search..."
+        bind:value={input}
+        on:keypress={handleKeyPress}
+        disabled={loading}
+      />
+      <button 
+        class="bg-blue-500 text-white px-4 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        on:click={() => search(input)}
+        disabled={loading}
+      >
+        {#if loading}
+          <span class="inline-block animate-spin mr-1">⟳</span>
+          Searching...
+        {:else}
+          Search
+        {/if}
+      </button>
     </div>
-  {/if}
-</div>
+
+    {#if result.length}
+      <div class="mt-4">
+        <h3 class="font-bold mb-3">Search Results:</h3>
+        <div class="grid gap-4 max-w-3xl">
+          {#each result as item}
+            <button 
+              type="button"
+              class="text-left border rounded p-4 grid grid-cols-[100px_220px_1fr] gap-4 cursor-pointer hover:bg-gray-50 w-full"
+              on:click={() => showResultModal(item)}
+            >
+              <div class="w-[100px]">
+                {#if item.image_url}
+                  <img src={item.image_url} alt="Page preview" class="w-full h-auto object-contain" />
+                {/if}
+              </div>
+              <div class="flex flex-col">
+                {#if $issueMap[item.parent_issue_id]}
+                  <div class="text-sm text-gray-600" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                    {@html $issueMap[item.parent_issue_id].description}
+                  </div>
+                  <div class="flex gap-2 mt-2 text-sm">
+                    <a 
+                      href={$issueMap[item.parent_issue_id].internet_archive} 
+                      class="text-blue-500 hover:underline" 
+                      target="_blank"
+                      on:click|stopPropagation
+                    >
+                      Archive
+                    </a>
+                    <a 
+                      href={$issueMap[item.parent_issue_id].issue_url} 
+                      class="text-blue-500 hover:underline" 
+                      target="_blank"
+                      on:click|stopPropagation
+                    >
+                      Info
+                    </a>
+                    <a 
+                      href={$issueMap[item.parent_issue_id].pdf_download} 
+                      class="text-blue-500 hover:underline" 
+                      target="_blank"
+                      on:click|stopPropagation
+                    >
+                      PDF
+                    </a>
+                  </div>
+                  <div class="mt-2 text-sm">
+                    <div class="font-bold">{collectionMap[$issueMap[item.parent_issue_id].collection]}</div>
+                    <div>Published: {$issueMap[item.parent_issue_id].pub_date}</div>
+                    <div>Page {item.page_number}/{$issueMap[item.parent_issue_id].num_pages}</div>
+                  </div>
+                {/if}
+              </div>
+              <div class="h-[150px] overflow-y-auto">
+                {item.ocr_result}
+              </div>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </div>
+</Modal>
