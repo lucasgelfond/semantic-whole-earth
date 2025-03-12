@@ -14,9 +14,6 @@ importers:
       '@huggingface/transformers':
         specifier: ^3.4.0
         version: 3.4.0
-      '@supabase/supabase-js':
-        specifier: ^2.49.1
-        version: 2.49.1
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -27,6 +24,9 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.22.0
+      '@supabase/supabase-js':
+        specifier: ^2.49.1
+        version: 2.49.1
       '@sveltejs/adapter-auto':
         specifier: ^4.0.0
         version: 4.0.0(@sveltejs/kit@2.19.0(@sveltejs/vite-plugin-svelte@5.0.3(svelte@5.22.6)(vite@6.2.1(@types/node@22.13.10)(jiti@2.4.2)(lightningcss@1.29.2)))(svelte@5.22.6)(vite@6.2.1(@types/node@22.13.10)(jiti@2.4.2)(lightningcss@1.29.2)))
