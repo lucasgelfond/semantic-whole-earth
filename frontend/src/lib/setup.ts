@@ -71,25 +71,58 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 	console.log('Seeding pages from CSV file...');
 
 	try {
-		// Create temp table
-		await db.exec('DROP TABLE IF EXISTS temp_page_import;');
+		console.log('Blob size:', pagesBlob.size);
+		console.log('Blob type:', pagesBlob.type);
+
+		// Clear existing pages
+		console.log('Clearing existing pages...');
+		await db.exec('TRUNCATE TABLE page CASCADE;');
+
+		// First, let's inspect the CSV structure
+		console.log('Inspecting CSV structure...');
+		const text = await pagesBlob.text();
+		const lines = text.split('\n');
+		const firstLine = lines[0];
+		console.log('CSV Header:', firstLine);
+		console.log(
+			'First data row preview:',
+			lines.length > 1 ? lines[1].substring(0, 200) + '...' : 'No data rows'
+		);
+		console.log('Total CSV lines:', lines.length);
+
+		// Get the column structure of the page table
+		console.log('Getting page table structure...');
+		const tableColumns = await db.query(`
+			SELECT column_name 
+			FROM information_schema.columns 
+			WHERE table_name = 'page'
+			ORDER BY ordinal_position;
+		`);
+
+		const pageColumns = tableColumns.rows.map((row) => row.column_name);
+		console.log('Page table columns:', pageColumns);
+
+		// Create a temporary table for the CSV first
+		console.log('Creating temporary import table...');
+		await db.exec('DROP TABLE IF EXISTS csv_import_data;');
 		await db.exec(`
-			CREATE TABLE temp_page_import (
-				id text,
-				parent_issue_id text,
-				page_number text,
-				ocr_result text,
-				created_at text,
-				error text,
-				fts text,
-				embedding text,
-				image_url text
+			CREATE TABLE csv_import_data (
+				column1 text,
+				column2 text,
+				column3 text,
+				column4 text,
+				column5 text,
+				column6 text,
+				column7 text,
+				column8 text,
+				column9 text
 			);
 		`);
 
-		// Import into temp table
+		// Import CSV into the temporary table
+		console.log('Importing CSV into temporary table...');
 		await db.query(
-			`COPY temp_page_import FROM '/dev/blob' WITH (
+			`COPY csv_import_data FROM '/dev/blob' WITH (
 				FORMAT csv,
 				HEADER true,
 				DELIMITER ',',
@@ -100,29 +133,75 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 			{ blob: pagesBlob }
 		);
 
-		// Clear existing pages
-		await db.exec('TRUNCATE TABLE page CASCADE;');
+		// Check the imported data
+		const importCount = await db.query<{ count: string }>(
+			'SELECT COUNT(*) as count FROM csv_import_data;'
+		);
+		console.log('Rows imported into temporary table:', importCount.rows[0].count);
 
-		// Bulk insert with type casting
+		// Sample the imported data
+		const sampleRows = await db.query('SELECT * FROM csv_import_data LIMIT 2;');
+		console.log('Sample rows from temporary table:', JSON.stringify(sampleRows.rows, null, 2));
+
+		// Now create the view after the table exists
+		console.log('Creating view for data transformation...');
+		await db.exec('DROP VIEW IF EXISTS page_import_view;');
+		await db.exec(`
+			CREATE VIEW page_import_view AS
+			SELECT 
+				CAST(NULLIF(column1, '') AS uuid) as id,
+				CAST(NULLIF(column2, '') AS uuid) as parent_issue_id,
+				column3 as page_number,
+				column4 as ocr_result,
+				CAST(NULLIF(column5, '') AS timestamp with time zone) as created_at,
+				-- Skip column6 (error)
+				-- Skip column7 (fts)
+				NULLIF(column8, '')::vector(384) as embedding,
+				column9 as image_url
+			FROM csv_import_data;
+		`);
+
+		// Check the view data
+		const viewCount = await db.query<{ count: string }>(
+			'SELECT COUNT(*) as count FROM page_import_view;'
+		);
+		console.log('Rows in view:', viewCount.rows[0].count);
+
+		// Sample the view data
+		const viewSample = await db.query(`
+			SELECT 
+				id, 
+				parent_issue_id, 
+				page_number, 
+				substr(ocr_result, 1, 50) as ocr_preview,
+				created_at,
+				substr(embedding::text, 1, 30) as embedding_preview,
+				image_url
+			FROM page_import_view LIMIT 2;
+		`);
+		console.log('Sample rows from view:', JSON.stringify(viewSample.rows, null, 2));
+
+		// Insert from view to actual table
+		console.log('Inserting data into final page table...');
 		await db.query(`
 			INSERT INTO page (
 				id,
 				parent_issue_id,
 				page_number,
 				ocr_result,
-				embedding,
 				created_at,
+				embedding,
 				image_url
 			)
 			SELECT 
-				CAST(id AS uuid),
-				CAST(parent_issue_id AS uuid),
+				id,
+				parent_issue_id,
 				page_number,
 				ocr_result,
-				NULLIF(embedding, '')::vector(384),
-				COALESCE(NULLIF(created_at, '')::timestamp with time zone, CURRENT_TIMESTAMP),
+				created_at,
+				embedding,
 				image_url
-			FROM temp_page_import;
+			FROM page_import_view;
 		`);
 
 		// Log final results
@@ -130,11 +209,16 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 		console.log('Final row count in page table:', finalCount.rows[0].count);
 
 		// Cleanup
-		await db.exec('DROP TABLE IF EXISTS temp_page_import;');
+		console.log('Cleaning up temporary objects...');
+		await db.exec('DROP VIEW IF EXISTS page_import_view;');
+		await db.exec('DROP TABLE IF EXISTS csv_import_data;');
+		console.log('Import completed successfully');
 	} catch (error) {
 		console.error('Error during page import:', error);
 		// Cleanup on error
-		await db.exec('DROP TABLE IF EXISTS temp_page_import;').catch(console.error);
+		console.log('Cleaning up after error...');
+		await db.exec('DROP VIEW IF EXISTS page_import_view;').catch(console.error);
+		await db.exec('DROP TABLE IF EXISTS csv_import_data;').catch(console.error);
 		throw error;
 	}
 };
