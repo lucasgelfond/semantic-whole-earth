@@ -305,21 +305,23 @@ export async function setupFromCSV() {
 }
 
 async function updateIssuesAndContent(database: PGlite) {
-	// Get issues and create map
-	const issues = await getIssues(database);
-	issueMap.set(
-		issues.reduce(
-			(acc, issue) => {
-				acc[issue.id] = issue;
-				return acc;
-			},
-			{} as Record<string, any>
-		)
-	);
+	try {
+		// Get issues and create map
+		const issues = await getIssues(database);
+		issueMap.set(
+			issues.reduce(
+				(acc, issue) => {
+					acc[issue.id] = issue;
+					return acc;
+				},
+				{} as Record<string, any>
+			)
+		);
 
-	// Get Items
-	const items = await database.query<{ ocr_result: string }>(
-		'SELECT ocr_result as content FROM page order by ocr_result asc'
-	);
-	content.set(items.rows.map((row) => row.content));
+		// Skip loading content for now to avoid memory issues
+		content.set([]);
+	} catch (error) {
+		console.error('Failed to update issues:', error);
+		throw error;
+	}
 }
