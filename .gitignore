@@ -6,3 +6,5 @@ frontend/static/issues.json
 frontend/static/database-dump-1741733651196.tar.gz
 frontend/static/pg-dump-issue-psql.csv
 frontend/static/pg-dump-page-psql.csv
+frontend/static/tarball-wec-dump.tar.gz
+frontend/static/pg-dump-all-pages-everything.csv

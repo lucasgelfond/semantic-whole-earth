@@ -2,6 +2,8 @@ import { PGlite } from '@electric-sql/pglite';
 import { writable, type Writable } from 'svelte/store';
 import type { Row } from '../types/row';
 import { getDB, initSchema, countRows, seedDb, getIssues } from '../utils/db';
+import { vector } from '@electric-sql/pglite/vector';
+import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
 
 // Create stores for global state
 export const db = writable<PGlite | null>(null);
@@ -327,5 +329,200 @@ async function updateIssuesAndContent(database: PGlite) {
 	} catch (error) {
 		console.error('Failed to update issues:', error);
 		throw error;
+	}
+}
+
+/**
+ * Fetches a tarball file and returns it as a File object
+ * @param url The URL of the tarball to fetch
+ * @returns A File object containing the tarball data
+ */
+async function fetchTarball(url: string): Promise<File> {
+	console.log(`Fetching tarball from ${url}...`);
+
+	const tarballResponse = await fetch(url, {
+		headers: {
+			Accept: 'application/octet-stream',
+			'Content-Type': 'application/octet-stream',
+			'Cache-Control': 'no-cache, no-store'
+		}
+	});
+
+	if (!tarballResponse.ok) {
+		throw new Error(
+			`Failed to fetch tarball: ${tarballResponse.statusText} (${tarballResponse.status})`
+		);
+	}
+
+	console.log('Response headers:', Object.fromEntries(tarballResponse.headers));
+	const arrayBuffer = await tarballResponse.arrayBuffer();
+	console.log('Received binary data, size:', arrayBuffer.byteLength, 'bytes');
+
+	// Create a File object from the arrayBuffer
+	const fileName = url.split('/').pop() || 'database-dump.tar.gz';
+	const tarballFile = new File([arrayBuffer], fileName, {
+		type: 'application/octet-stream'
+	});
+	console.log('Created file object:', tarballFile.name, 'size:', tarballFile.size);
+
+	return tarballFile;
+}
+
+/**
+ * Deletes any existing database and releases connections
+ */
+async function deleteOtherDatabases() {
+	console.log('Preparing to delete existing database...');
+
+	// First, set the global db to null to release any existing connections
+	db.set(null);
+	console.log('Released existing database connections');
+
+	// Force garbage collection if possible to release any lingering connections
+	if (typeof window.gc === 'function') {
+		try {
+			window.gc();
+			console.log('Forced garbage collection');
+		} catch (e) {
+			console.log('Could not force garbage collection');
+		}
+	}
+
+	// Small delay to ensure connections are fully closed
+	await new Promise((resolve) => setTimeout(resolve, 500));
+
+	// Check if database exists
+	const databases = await indexedDB.databases();
+	const existingDb = databases.find((db) => db.name === 'supa-semantic-search');
+
+	if (existingDb) {
+		console.log('Found existing database:', existingDb.name, 'version:', existingDb.version);
+
+		// Delete the database from IndexedDB
+		console.log('Deleting existing database...');
+		const deleteRequest = indexedDB.deleteDatabase('supa-semantic-search');
+
+		await new Promise((resolve, reject) => {
+			deleteRequest.onsuccess = () => {
+				console.log('Existing database deleted successfully');
+				resolve(true);
+			};
+
+			deleteRequest.onerror = () => {
+				console.error('Error deleting database:', deleteRequest.error);
+				reject(new Error(`Failed to delete database: ${deleteRequest.error}`));
+			};
+
+			deleteRequest.onblocked = () => {
+				console.warn('Database deletion blocked - connections still open');
+				// Try to handle blocked state
+				window.alert('Please close other tabs using this application and try again.');
+				reject(new Error('Database deletion blocked'));
+			};
+		});
+
+		// Add a delay after deletion to ensure it's complete
+		console.log('Waiting for deletion to complete...');
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		// Verify deletion
+		const afterDatabases = await indexedDB.databases();
+		const stillExists = afterDatabases.some((db) => db.name === 'supa-semantic-search');
+
+		if (stillExists) {
+			console.error('Database still exists after deletion attempt');
+			throw new Error('Could not delete existing database');
+		} else {
+			console.log('Confirmed database deletion');
+		}
+	} else {
+		console.log('No existing database found, proceeding with clean setup');
+	}
+}
+
+/**
+ * Sets up the database by importing a tarball dump
+ * Uses PGlite's direct database import capability
+ */
+async function verifyDb(newDb: PGlite) {
+	console.log('Verifying import...');
+	const tables = await newDb.query<{ table_name: string }>(
+		`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
+	);
+	console.log('Tables found:', tables.rows.map((r) => r.table_name).join(', '));
+
+	// Check counts for main tables
+	const issueCounts = await newDb.query<{ count: string }>('SELECT COUNT(*) as count FROM issue;');
+	console.log('Issue count:', issueCounts.rows[0].count);
+
+	const pageCounts = await newDb.query<{ count: string }>('SELECT COUNT(*) as count FROM page;');
+	console.log('Page count:', pageCounts.rows[0].count);
+}
+
+export async function setupFromTarball() {
+	console.log('Starting database setup from tarball...');
+	const startTime = performance.now();
+	let stepStartTime = startTime;
+	initializing.set(true);
+
+	const logStepTime = (stepName: string) => {
+		const now = performance.now();
+		const stepDuration = (now - stepStartTime) / 1000;
+		const totalDuration = (now - startTime) / 1000;
+		console.log(
+			`TIMING - ${stepName}: ${stepDuration.toFixed(2)}s (total: ${totalDuration.toFixed(2)}s)`
+		);
+		stepStartTime = now;
+	};
+
+	try {
+		// Delete existing database if it exists
+		console.log('Ensuring no existing database...');
+		await deleteOtherDatabases();
+		logStepTime('Delete existing database');
+
+		// Fetch the tarball
+		const tarballFile = await fetchTarball('/tarball-wec-dump.tar.gz');
+		logStepTime('Fetch tarball');
+
+		// Create a new PGlite instance with the tarball data
+		console.log('Creating new database instance with imported data...');
+
+		// Use a different database name to avoid conflicts
+		const uniqueDbName = `idb://supa-semantic-search-${Date.now()}`;
+		console.log(`Using unique database name: ${uniqueDbName}`);
+
+		const newDb = new PGlite(uniqueDbName, {
+			extensions: {
+				vector,
+				uuid_ossp
+			},
+			loadDataDir: tarballFile
+		});
+
+		// Wait for the database to be ready
+		await newDb.waitReady;
+		logStepTime('Create and load database');
+
+		await verifyDb(newDb);
+		logStepTime('Verify import');
+
+		// Update global state
+		db.set(newDb);
+		console.log('Updating global state...');
+		await updateIssuesAndContent(newDb);
+		logStepTime('Update global state');
+
+		const totalDuration = (performance.now() - startTime) / 1000;
+		console.log(`TIMING - Total import time: ${totalDuration.toFixed(2)}s`);
+		console.log('Database setup completed successfully');
+
+		return newDb;
+	} catch (error) {
+		console.error('Failed to setup database from tarball:', error);
+		console.error('Error details:', error instanceof Error ? error.message : String(error));
+		throw error;
+	} finally {
+		initializing.set(false);
 	}
 }
