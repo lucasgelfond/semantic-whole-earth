@@ -3,7 +3,7 @@
   import { getDB, initSchema, countRows, seedDb, getTopTen, getBlob, clearDb, getIssues } from '../utils/db';
   import { db } from '$lib/setup';
   import { get } from 'svelte/store';
-  import { setupFromScratch } from '$lib/setup';
+  import { setupFromScratch, setupFromCSV } from '$lib/setup';
 
   async function handleInitSchema() {
     const dbInstance = get(db);
@@ -82,6 +82,15 @@
       console.error('Failed to setup from scratch:', error);
     }
   }
+
+  async function handleSetupFromCSV() {
+    try {
+      await setupFromCSV();
+      console.log('Database setup from CSV complete');
+    } catch (error) {
+      console.error('Failed to setup from CSV:', error);
+    }
+  }
 </script>
 
 <div class="flex flex-col gap-4">
@@ -91,6 +100,12 @@
       on:click={handleSetupFromScratch}
     >
       Setup from Scratch
+    </button>
+    <button 
+      class="bg-green-500 text-white px-4 py-1 rounded"
+      on:click={handleSetupFromCSV}
+    >
+      Setup from CSV
     </button>
     <button 
       class="bg-yellow-500 text-white px-4 py-1 rounded"

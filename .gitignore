@@ -4,3 +4,5 @@ processing/WECs/
 frontend/static/rows.json
 frontend/static/issues.json
 frontend/static/database-dump-1741733651196.tar.gz
+frontend/static/pg-dump-issue-psql.csv
+frontend/static/pg-dump-page-psql.csv
