@@ -71,18 +71,9 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 	console.log('Seeding pages from CSV file...');
 
 	try {
-		console.log('Blob size:', pagesBlob.size);
-		console.log('Blob type:', pagesBlob.type);
-
-		// First, let's inspect the CSV structure
-		const text = await pagesBlob.text();
-		const lines = text.split('\n', 2); // Get header and first line only
-		console.log('CSV Header:', JSON.stringify(lines[0]));
-		console.log('First data row preview:', JSON.stringify(lines[1].substring(0, 200) + '...'));
-
-		// Create temporary table for import with all columns as text first
+		// Create temp table
+		await db.exec('DROP TABLE IF EXISTS temp_page_import;');
 		await db.exec(`
-			DROP TABLE IF EXISTS temp_page_import;
 			CREATE TABLE temp_page_import (
 				id text,
 				parent_issue_id text,
@@ -96,7 +87,7 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 			);
 		`);
 
-		// Import into temp table first
+		// Import into temp table
 		await db.query(
 			`COPY temp_page_import FROM '/dev/blob' WITH (
 				FORMAT csv,
@@ -109,74 +100,10 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 			{ blob: pagesBlob }
 		);
 
-		// Log import stats
-		const importCount = await db.query<{ count: string }>('SELECT COUNT(*) FROM temp_page_import;');
-		console.log('Rows in temp import table:', JSON.stringify(importCount.rows[0].count));
-
-		// Sample the imported data
-		const sampleRows = await db.query('SELECT * FROM temp_page_import LIMIT 2;');
-		console.log('Sample imported rows:', JSON.stringify(sampleRows.rows, null, 2));
-
-		// After the COPY command, add these diagnostic queries:
-		console.log('Checking imported data...');
-
-		// Check for any null IDs
-		const nullIds = await db.query(`
-			SELECT COUNT(*) as count 
-			FROM temp_page_import 
-			WHERE id IS NULL OR id = '';
-		`);
-		console.log('Rows with null IDs:', JSON.stringify(nullIds.rows[0].count));
-
-		// Check for invalid UUIDs
-		const invalidUuids = await db.query(`
-			SELECT id, parent_issue_id 
-			FROM temp_page_import 
-			WHERE id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-			OR parent_issue_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-			LIMIT 5;
-		`);
-		console.log('Sample invalid UUIDs:', JSON.stringify(invalidUuids.rows, null, 2));
-
-		// Check column counts
-		const columnInfo = await db.query(`
-			SELECT column_name, data_type 
-			FROM information_schema.columns 
-			WHERE table_name = 'temp_page_import'
-			ORDER BY ordinal_position;
-		`);
-		console.log('Temp table columns:', JSON.stringify(columnInfo.rows, null, 2));
-
-		// Sample a few rows with specific columns
-		const sampleDetailedRows = await db.query(`
-			SELECT 
-				id,
-				parent_issue_id,
-				page_number,
-				substr(ocr_result, 1, 50) as ocr_preview,
-				created_at,
-				substr(embedding::text, 1, 30) as embedding_preview
-			FROM temp_page_import 
-			LIMIT 3;
-		`);
-		console.log('Detailed sample rows:', JSON.stringify(sampleDetailedRows.rows, null, 2));
-
-		// Check for any oversized fields
-		const longFields = await db.query(`
-			SELECT id,
-				length(ocr_result) as ocr_length,
-				length(embedding::text) as embedding_length
-			FROM temp_page_import 
-			ORDER BY length(ocr_result) DESC 
-			LIMIT 3;
-		`);
-		console.log('Longest field samples:', JSON.stringify(longFields.rows, null, 2));
-
 		// Clear existing pages
-		console.log('Clearing existing pages...');
 		await db.exec('TRUNCATE TABLE page CASCADE;');
 
-		// Insert from temp table to main table with proper type casting
+		// Bulk insert with type casting
 		await db.query(`
 			INSERT INTO page (
 				id,
@@ -192,22 +119,15 @@ export const seedDbFromPageCSV = async (db: PGlite, pagesBlob: Blob): Promise<vo
 				CAST(parent_issue_id AS uuid),
 				page_number,
 				ocr_result,
-				CASE 
-					WHEN embedding IS NULL OR embedding = '' THEN NULL
-					ELSE embedding::vector(384)
-				END,
-				CASE 
-					WHEN created_at IS NULL OR created_at = '' THEN CURRENT_TIMESTAMP
-					ELSE CAST(created_at AS timestamp with time zone)
-				END,
+				NULLIF(embedding, '')::vector(384),
+				COALESCE(NULLIF(created_at, '')::timestamp with time zone, CURRENT_TIMESTAMP),
 				image_url
-			FROM temp_page_import
-			WHERE CAST(parent_issue_id AS uuid) IN (SELECT id FROM issue);
+			FROM temp_page_import;
 		`);
 
-		// Log results
+		// Log final results
 		const finalCount = await db.query<{ count: string }>('SELECT COUNT(*) FROM page;');
-		console.log('Final row count in page table:', JSON.stringify(finalCount.rows[0].count));
+		console.log('Final row count in page table:', finalCount.rows[0].count);
 
 		// Cleanup
 		await db.exec('DROP TABLE IF EXISTS temp_page_import;');
