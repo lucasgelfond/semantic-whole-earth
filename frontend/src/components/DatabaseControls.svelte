@@ -1,13 +1,9 @@
 <script lang="ts">
   import type { PGlite } from '@electric-sql/pglite';
-  import { getDB, initSchema, countRows, seedDb, getTopTen, getBlob, clearDb, getIssues, importBlob } from '../utils/db';
+  import { getDB, initSchema, countRows, seedDb, getTopTen, getBlob, clearDb, getIssues } from '../utils/db';
   import { db } from '$lib/setup';
   import { get } from 'svelte/store';
-  import { setupFromDump, setupFromScratch } from '$lib/setup';
-
-  let uploadedFile: File | null = null;
-  let uploadStatus = '';
-  let isLoading = false;
+  import { setupFromScratch } from '$lib/setup';
 
   async function handleInitSchema() {
     const dbInstance = get(db);
@@ -78,52 +74,6 @@
     console.log('Issues:', issues);
   }
 
-  async function handleImportBlob(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const files = input.files;
-
-    const dbInstance = get(db);
-    if (!dbInstance || !files || files.length !== 1) {
-      console.error('Database not initialized or incorrect number of files');
-      return;
-    }
-
-    try {
-      await importBlob(dbInstance, files[0]);
-      console.log('Successfully imported database from file');
-    } catch (error) {
-      console.error('Failed to import database:', error);
-    }
-  }
-
-  async function handleFileSelect(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files[0]) {
-      uploadedFile = input.files[0];
-      uploadStatus = `Selected file: ${uploadedFile.name}`;
-    }
-  }
-
-  async function handleSetupFromDump() {
-    if (!uploadedFile) {
-      uploadStatus = 'Please select a file first';
-      return;
-    }
-
-    isLoading = true;
-    uploadStatus = 'Setting up database from dump...';
-
-    try {
-      await setupFromDump(uploadedFile);
-      uploadStatus = 'Database setup from dump complete';
-    } catch (error) {
-      uploadStatus = `Failed to setup from dump: ${error}`;
-      console.error('Failed to setup from dump:', error);
-    } finally {
-      isLoading = false;
-    }
-  }
-
   async function handleSetupFromScratch() {
     try {
       await setupFromScratch();
@@ -135,28 +85,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <div class="flex items-center gap-4">
-    <input 
-      type="file"
-      accept="*"
-      on:change={handleFileSelect}
-      class="border rounded px-2 py-1"
-    />
-    {#if uploadStatus}
-      <span class={isLoading ? "text-blue-500" : "text-gray-600"}>
-        {uploadStatus}
-      </span>
-    {/if}
-  </div>
-
   <div class="flex gap-2">
-    <button 
-      class="bg-emerald-500 text-white px-4 py-1 rounded disabled:opacity-50"
-      on:click={handleSetupFromDump}
-      disabled={!uploadedFile || isLoading}
-    >
-      Setup from Dump
-    </button>
     <button 
       class="bg-amber-500 text-white px-4 py-1 rounded"
       on:click={handleSetupFromScratch}

@@ -63,9 +63,11 @@ export const countRows = async (db: PGlite, table: string): Promise<number> => {
 };
 
 export const seedDb = async (db: PGlite): Promise<void> => {
+	console.log('seeindg DB');
 	// First seed issues
 	const issuesResponse = await fetch('/issues.json');
 	const issues = await issuesResponse.json();
+	console.log('Total issues in issues.json:', issues.length);
 
 	for (const issue of issues) {
 		await db.query(
@@ -91,7 +93,9 @@ export const seedDb = async (db: PGlite): Promise<void> => {
 	// Then seed pages
 	const pagesResponse = await fetch('/rows.json');
 	const rows = await pagesResponse.json();
+	console.log('Total pages in rows.json:', rows.length);
 
+	let insertedCount = 0;
 	for (const row of rows) {
 		const { parent_issue_id, page_number, ocr_result, embedding, image_url } = row;
 		if (parent_issue_id && page_number && ocr_result) {
@@ -100,9 +104,16 @@ export const seedDb = async (db: PGlite): Promise<void> => {
 				VALUES ($1, $2, $3, $4, $5)`,
 				[parent_issue_id, page_number, ocr_result, embedding, image_url]
 			);
+			insertedCount++;
+		} else {
+			console.log('Skipping row due to missing required fields:', {
+				hasParentId: !!parent_issue_id,
+				hasPageNumber: !!page_number,
+				hasOcrResult: !!ocr_result
+			});
 		}
 	}
-	console.log('done seeding DB');
+	console.log(`Inserted ${insertedCount} out of ${rows.length} rows into DB`);
 };
 
 export const getTopTen = async (db: PGlite): Promise<Array<Row>> => {
@@ -208,31 +219,6 @@ export const getBlob = async (db: PGlite): Promise<void> => {
 		URL.revokeObjectURL(url);
 	} catch (error) {
 		console.error('Failed to export database:', error);
-		throw error;
-	}
-};
-
-// Import database from a file
-export const importBlob = async (db: PGlite, file: Blob): Promise<void> => {
-	try {
-		// Create a new database instance with the dump file
-		const newDb = new PGlite('idb://supa-semantic-search', {
-			loadDataDir: file,
-			extensions: {
-				vector,
-				uuid_ossp
-			}
-		});
-
-		// Wait for the database to be ready
-		await newDb.waitReady;
-
-		// Update the singleton instance
-		dbInstance = newDb;
-
-		console.log('Successfully imported database');
-	} catch (error) {
-		console.error('Failed to import database:', error);
 		throw error;
 	}
 };
