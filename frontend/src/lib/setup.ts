@@ -34,7 +34,6 @@ export async function setupFromScratch() {
 		initializing.set(false);
 	}
 }
-
 export const seedDbFromCSVs = async (db: PGlite, issuesBlob: Blob): Promise<void> => {
 	console.log('Seeding DB from CSV files...');
 
@@ -46,15 +45,9 @@ export const seedDbFromCSVs = async (db: PGlite, issuesBlob: Blob): Promise<void
 		console.log('Clearing existing data...');
 		await db.exec('TRUNCATE TABLE issue CASCADE;');
 
-		// Create a temporary table for inspection
-		await db.exec(`
-			DROP TABLE IF EXISTS temp_issue_import;
-			CREATE TABLE temp_issue_import (LIKE issue INCLUDING ALL);
-		`);
-
-		// Import into temp table first
+		// Import directly into issue table
 		await db.query(
-			`COPY temp_issue_import FROM '/dev/blob' WITH (
+			`COPY issue FROM '/dev/blob' WITH (
 				FORMAT csv,
 				HEADER true,
 				DELIMITER ',',
@@ -65,31 +58,12 @@ export const seedDbFromCSVs = async (db: PGlite, issuesBlob: Blob): Promise<void
 			{ blob: issuesBlob }
 		);
 
-		// Check the imported data
-		const importedCount = await db.query('SELECT COUNT(*) FROM temp_issue_import;');
-		console.log('Rows in temp import table:', importedCount.rows[0].count);
-
-		const importedSample = await db.query('SELECT id FROM temp_issue_import LIMIT 3;');
-		console.log('Sample imported IDs:', importedSample.rows);
-
-		// Now do the actual import
-		await db.query(
-			`INSERT INTO issue 
-			 SELECT * FROM temp_issue_import;`
-		);
-
 		// Log final results
-		const finalCount = await db.query('SELECT COUNT(*) FROM issue;');
+		const finalCount = await db.query<{ count: string }>('SELECT COUNT(*) FROM issue;');
 		console.log('Final row count in issue table:', finalCount.rows[0].count);
-
-		// Cleanup
-		await db.exec('DROP TABLE IF EXISTS temp_issue_import;');
 	} catch (error) {
 		console.error('Error during import:', error);
 		throw error;
-	} finally {
-		// Cleanup on error
-		await db.exec('DROP TABLE IF EXISTS temp_issue_import;').catch(console.error);
 	}
 };
 
