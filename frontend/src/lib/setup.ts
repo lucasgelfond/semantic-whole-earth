@@ -333,14 +333,16 @@ async function updateIssuesAndContent(database: PGlite) {
 }
 
 /**
- * Fetches a tarball file and returns it as a File object
+ * Fetches a tarball file and returns it as a Blob
  * @param url The URL of the tarball to fetch
- * @returns A File object containing the tarball data
+ * @returns A Blob containing the tarball data
  */
-async function fetchTarball(url: string): Promise<File> {
+async function fetchTarball(url: string): Promise<Blob> {
 	console.log(`Fetching tarball from ${url}...`);
 
 	const tarballResponse = await fetch(url, {
+		method: 'GET',
+		credentials: 'include',
 		headers: {
 			Accept: 'application/octet-stream',
 			'Content-Type': 'application/octet-stream',
@@ -358,14 +360,10 @@ async function fetchTarball(url: string): Promise<File> {
 	const arrayBuffer = await tarballResponse.arrayBuffer();
 	console.log('Received binary data, size:', arrayBuffer.byteLength, 'bytes');
 
-	// Create a File object from the arrayBuffer
-	const fileName = url.split('/').pop() || 'database-dump.tar.gz';
-	const tarballFile = new File([arrayBuffer], fileName, {
-		type: 'application/octet-stream'
-	});
-	console.log('Created file object:', tarballFile.name, 'size:', tarballFile.size);
+	const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+	console.log('Created blob, size:', blob.size, 'bytes, type:', blob.type);
 
-	return tarballFile;
+	return blob;
 }
 
 /**
@@ -481,8 +479,8 @@ export async function setupFromTarball() {
 		await deleteOtherDatabases();
 		logStepTime('Delete existing database');
 
-		// Fetch the tarball
-		const tarballFile = await fetchTarball('/tarball-wec-dump.tar.gz');
+		// Fetch the tarball as a blob
+		const tarballBlob = await fetchTarball('/tarball-wec-dump.tar.gz');
 		logStepTime('Fetch tarball');
 
 		// Create a new PGlite instance with the tarball data
@@ -497,7 +495,7 @@ export async function setupFromTarball() {
 				vector,
 				uuid_ossp
 			},
-			loadDataDir: tarballFile
+			loadDataDir: tarballBlob // Pass the blob directly
 		});
 
 		// Wait for the database to be ready
